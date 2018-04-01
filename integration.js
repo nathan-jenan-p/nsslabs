@@ -1,5 +1,6 @@
 let async = require('async');
 let config = require('./config/config');
+let request = require('request');
 
 let Logger;
 let requestOptions = {};
@@ -9,6 +10,7 @@ function getRequestOptions() {
 }
 
 function doLookup(entities, options, callback) {
+    Logger.trace('starting lookup');
     let results = [];
 
     async.each(entities, (entity, done) => {
@@ -16,8 +18,9 @@ function doLookup(entities, options, callback) {
         requestOptions.url = 'https://caws3.nsslabs.com/graphql';
         requestOptions.method = 'POST';
         requestOptions.headers = {
-            Authorization: options.apiKey
+            Authorization: `Bearer ${options.apiKey}`
         };
+        requestOptions.json = true;
         requestOptions.body = {
             query: `query { 
                 threatInfo(ipAddresses: ["${entity.value}"]) {
@@ -28,11 +31,16 @@ function doLookup(entities, options, callback) {
             }`
         };
 
+        Logger.trace({ requestOptions: requestOptions });
+
         request(requestOptions, (err, resp, body) => {
             if (err || resp.statusCode != 200) {
                 Logger.error({ err: err, body: body });
-                done(err || new Error('resp code was not 200 ' + body))
+                done(err || new Error('resp code was not 200 ' + body));
+                return;
             }
+
+            Logger.trace('got response now looking up nssids');
 
             let threatInfo = body.data.threatInfo;
             if (threatInfo.exploits.length === 0) {
@@ -45,7 +53,7 @@ function doLookup(entities, options, callback) {
                 async.each(body.data.threatInfo.exploits, (exploit, done) => {
                     requestOptions.body = {
                         query: `query {
-                            threatIntel(nssid: ${exploit.nssid}) {
+                            threatIntel(nssid: "${exploit.nssid}") {
                                 details {
                                     exploitType
                                     discoveryDate
@@ -82,18 +90,6 @@ function doLookup(entities, options, callback) {
                                             }
                                         }
                                     }
-                                    source {
-                                        exploitType
-                                        discoveryDate
-                                        threatType
-                                        device {
-                                            name
-                                            type
-                                            vendor {
-                                                name
-                                            }
-                                        }
-                                    }
                                 }
                             }
                         }`
@@ -101,22 +97,35 @@ function doLookup(entities, options, callback) {
                     request(requestOptions, (err, resp, body) => {
                         if (err || resp.statusCode != 200) {
                             Logger.error({ err: err, body: body });
-                            done(err || new Error('resp code was not 200 ' + body))
+                            done(err || new Error('resp code was not 200 ' + body));
+                            return;
                         }
 
-                        Logger.trace({ body: body });
+                        Logger.trace('got response now add nssids to result');
+
+                        results.push({
+                            entity: entity,
+                            data: {
+                                summary: ['test'],
+                                details: body.data.threatIntel
+                            }
+                        });
                         done();
                     });
+                }, err => {
+                    done(err);
                 });
             }
         });
     }, err => {
+        Logger.trace({ resultsLength: results.length }, 'results sent to client');
         callback(err, results);
     });
 }
 
 function startup(logger) {
     Logger = logger;
+    Logger.trace('starting startup');
 
     if (typeof config.request.cert === 'string' && config.request.cert.length > 0) {
         requestOptions.cert = fs.readFileSync(config.request.cert);
@@ -144,13 +153,14 @@ function startup(logger) {
 }
 
 function validateOptions(options, callback) {
+    Logger.trace('starting validate');
     let errors = [];
 
     if (typeof options.apiKey.value !== 'string' ||
         (typeof options.apiKey.value === 'string' && options.apiKey.value.length === 0)) {
         errors.push({
             key: "apiKey",
-            message: errMessage
+            message: "API Key must be set"
         });
     }
 

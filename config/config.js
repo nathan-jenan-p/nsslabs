@@ -15,7 +15,7 @@ module.exports = {
      * @type String
      * @required
      */
-    acronym: "NSL",
+    acronym: "NL",
     /**
      * Description for this integration which is displayed in the Polarity integrations user interface
      *
@@ -90,7 +90,7 @@ module.exports = {
         // the directory you specify is writable by the `polarityd:polarityd` user and group.
 
         //directoryPath: '/var/log/polarity-integrations',
-        level: 'info',  //trace, debug, info, warn, error, fatal
+        level: 'trace',  //trace, debug, info, warn, error, fatal
     },
     /**
      * Options that are displayed to the user/admin in the Polarity integration user-interface.  Should be structured
@@ -101,8 +101,8 @@ module.exports = {
      */
     options: [
         {
-            key: "API Key",
-            name: "apiKey",
+            key: "apiKey",
+            name: "API Key",
             description: "example description of this option",
             default: "",
             type: "text",
