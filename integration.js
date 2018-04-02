@@ -5,6 +5,7 @@ let request = require('request');
 let Logger;
 let requestOptions = {};
 
+// TODO make this a request.default thingy
 function getRequestOptions() {
     return JSON.parse(JSON.stringify(requestOptions));
 }
@@ -21,9 +22,9 @@ function doLookup(entities, options, callback) {
             Authorization: `Bearer ${options.apiKey}`
         };
         requestOptions.json = true;
-        requestOptions.body = {
+        requestOptions.body = { // TODO make the date range dynamic
             query: `query { 
-                threatInfo(ipAddresses: ["${entity.value}"]) {
+                threatInfo(ipAddresses: ["${entity.value}"] start: "2018-02-01" end: "2018-03-01") {
                     exploits {
                         nssid
                     }
@@ -107,7 +108,7 @@ function doLookup(entities, options, callback) {
                             entity: entity,
                             data: {
                                 summary: ['test'],
-                                details: body.data.threatIntel
+                                details: body.data.threatIntel.details
                             }
                         });
                         done();
