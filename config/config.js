@@ -108,6 +108,15 @@ module.exports = {
             type: "text",
             userCanEdit: false,
             adminOnly: true
+        },
+        {
+            key: "range",
+            name: "Search Range",
+            description: "The number of days in the past to lookup threats.  Default is 30.",
+            default: 30,
+            type: "number",
+            userCanEdit: false,
+            adminOnly: true
         }
     ]
 };

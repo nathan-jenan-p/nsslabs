@@ -1,40 +1,52 @@
 let async = require('async');
 let config = require('./config/config');
 let request = require('request');
+let moment = require('moment');
+
+const DATE_FORMAT = 'YYYY-MM-DD'; //2018-02-01
 
 let Logger;
 let requestOptions = {};
-
-// TODO make this a request.default thingy
-function getRequestOptions() {
-    return JSON.parse(JSON.stringify(requestOptions));
-}
+let requestWithDefaults;
 
 function doLookup(entities, options, callback) {
     Logger.trace('starting lookup');
     let results = [];
 
     async.each(entities, (entity, done) => {
-        let requestOptions = getRequestOptions();
+        let startDate = moment().subtract(options.range, 'days').format(DATE_FORMAT)
+        let endDate = moment().format(DATE_FORMAT);
+
+        let requestOptions = {};
         requestOptions.url = 'https://caws3.nsslabs.com/graphql';
         requestOptions.method = 'POST';
         requestOptions.headers = {
             Authorization: `Bearer ${options.apiKey}`
         };
         requestOptions.json = true;
-        requestOptions.body = { // TODO make the date range dynamic
-            query: `query { 
-                threatInfo(ipAddresses: ["${entity.value}"] start: "2018-02-01" end: "2018-03-01") {
+
+        if (entity.isIP) {
+            requestOptions.body = {
+                query: `query { 
+                threatInfo(ipAddresses: ["${entity.value}"] start: "${startDate}" end: "${endDate}") {
                     exploits {
                         nssid
                     }
                 }
             }`
-        };
+            };
+        } else {
+            results.push({
+                entity: entity,
+                data: null
+            });
+            done();
+            return;
+        }
 
         Logger.trace({ requestOptions: requestOptions });
 
-        request(requestOptions, (err, resp, body) => {
+        requestWithDefaults(requestOptions, (err, resp, body) => {
             if (err || resp.statusCode != 200) {
                 Logger.error({ err: err, body: body });
                 done(err || new Error('resp code was not 200 ' + body));
@@ -55,6 +67,7 @@ function doLookup(entities, options, callback) {
                     requestOptions.body = {
                         query: `query {
                             threatIntel(nssid: "${exploit.nssid}") {
+                                nssid
                                 details {
                                     exploitType
                                     discoveryDate
@@ -95,7 +108,7 @@ function doLookup(entities, options, callback) {
                             }
                         }`
                     };
-                    request(requestOptions, (err, resp, body) => {
+                    requestWithDefaults(requestOptions, (err, resp, body) => {
                         if (err || resp.statusCode != 200) {
                             Logger.error({ err: err, body: body });
                             done(err || new Error('resp code was not 200 ' + body));
@@ -108,7 +121,7 @@ function doLookup(entities, options, callback) {
                             entity: entity,
                             data: {
                                 summary: ['test'],
-                                details: body.data.threatIntel.details
+                                details: body.data.threatIntel
                             }
                         });
                         done();
@@ -126,7 +139,6 @@ function doLookup(entities, options, callback) {
 
 function startup(logger) {
     Logger = logger;
-    Logger.trace('starting startup');
 
     if (typeof config.request.cert === 'string' && config.request.cert.length > 0) {
         requestOptions.cert = fs.readFileSync(config.request.cert);
@@ -151,6 +163,8 @@ function startup(logger) {
     if (typeof config.request.rejectUnauthorized === 'boolean') {
         requestOptions.rejectUnauthorized = config.request.rejectUnauthorized;
     }
+
+    requestWithDefaults = request.defaults(requestOptions);
 }
 
 function validateOptions(options, callback) {
